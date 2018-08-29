@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Authors>Olivia Trewin</Authors>
+    <Company>Project Ceilidh</Company>
+    <Product>Cobble</Product>
+    <Description>A .NET Standard framework for creating extremely extensible applications.</Description>
+    <PackageLicenseUrl>https://raw.githubusercontent.com/Ceilidh-Team/Cobble/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/Ceilidh-Team/Cobble</PackageProjectUrl>
+  </PropertyGroup>
+</Project>
