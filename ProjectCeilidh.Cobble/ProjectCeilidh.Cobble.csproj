@@ -5,9 +5,13 @@
     <Authors>Olivia Trewin</Authors>
     <Company>Project Ceilidh</Company>
     <Product>Cobble</Product>
+    <Title>Cobble</Title>
     <Description>A .NET Standard framework for creating extremely extensible applications.</Description>
     <PackageLicenseUrl>https://raw.githubusercontent.com/Ceilidh-Team/Cobble/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/Ceilidh-Team/Cobble</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Ceilidh-Team/Cobble.git</RepositoryUrl>
+    <Copyright>2018 Olivia Trewin</Copyright>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Reflection.DispatchProxy" Version="4.5.1" />
