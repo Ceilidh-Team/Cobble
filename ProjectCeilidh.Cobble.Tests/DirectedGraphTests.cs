@@ -34,7 +34,7 @@ namespace ProjectCeilidh.Cobble.Tests
             graph.Link(4, 3);
             graph.Link(3, 0);
             
-            Assert.Throws<Exception>(() => graph.TopologicalSort().ToList());
+            Assert.Throws<DirectedGraph<int>.CyclicGraphException>(() => graph.TopologicalSort().ToList());
         }
     }
 }

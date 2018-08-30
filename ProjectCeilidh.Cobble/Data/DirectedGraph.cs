@@ -10,53 +10,89 @@ namespace ProjectCeilidh.Cobble.Data
     /// <typeparam name="TNode"></typeparam>
     internal class DirectedGraph<TNode>
     {
-        private readonly HashSet<TNode> _nodes;
-        private readonly Dictionary<TNode, HashSet<TNode>> _incomingEdges, _outgoingEdges;
+        private readonly Dictionary<TNode, int> _nodes;
+        private readonly Dictionary<TNode, HashSet<TNode>> _outgoingEdges;
 
+        /// <summary>
+        /// Construct a directed graph with no nodes.
+        /// </summary>
         public DirectedGraph() : this(Enumerable.Empty<TNode>())
         {
 
         }
 
+        /// <summary>
+        /// Construct a directed graph with the specified initial nodes.
+        /// </summary>
+        /// <param name="initialNodes">Initial nodes.</param>
         public DirectedGraph(IEnumerable<TNode> initialNodes)
         {
-            _nodes = new HashSet<TNode>(initialNodes);
-
-            _incomingEdges = new Dictionary<TNode, HashSet<TNode>>();
+            _nodes = initialNodes.ToDictionary(x => x, x => 0);
             _outgoingEdges = new Dictionary<TNode, HashSet<TNode>>();
         }
 
+        /// <summary>
+        /// Add a new node to the graph.
+        /// </summary>
+        /// <returns>True if the node was added, false otherwise.</returns>
+        /// <param name="node">The node to add.</param>
+        public void Add(TNode node) => _nodes[node] = 0;
+
+        /// <summary>
+        /// Add a link from <paramref name="src"/> to <paramref name="dst"/>.
+        /// </summary>
+        /// <param name="src">The start of the link.</param>
+        /// <param name="dst">The end of the link.</param>
         public void Link(TNode src, TNode dst)
         {
-            if (!_incomingEdges.TryGetValue(dst, out var inSet))
-                inSet = _incomingEdges[dst] = new HashSet<TNode>();
-
-            inSet.Add(src);
-
             if (!_outgoingEdges.TryGetValue(src, out var outSet))
                 outSet = _outgoingEdges[src] = new HashSet<TNode>();
 
             outSet.Add(dst);
+            _nodes[dst]++;
         }
 
+        /// <summary>
+        /// Topologically sort the graph, excepting if a cycle is detected.
+        /// </summary>
+        /// <returns>A sequence of nodes in topological order.</returns>
+        /// <remarks>
+        /// Implements Kahn's algorithm for topological sorting, without removing edges.
+        /// This saves a copy operation and allows the sort to be executed multiple times.
+        /// </remarks>
         public IEnumerable<TNode> TopologicalSort()
         {
-            var queue = new PriorityQueue<int, TNode>(_nodes.Select(x => (_incomingEdges.TryGetValue(x, out var set) ? set.Count : 0, x)));
+            var refDict = new Dictionary<TNode, int>(_nodes);
 
-            while (queue.TryPop(out var incoming, out var node))
+            var list = new LinkedList<TNode>(refDict.Where(x => x.Value == 0).Select(x => x.Key));
+
+            while (list.Count > 0)
             {
-                if (incoming != 0) throw new Exception("Circular dependency"); // TODO: Real exception data
-
-                if (_outgoingEdges.TryGetValue(node, out var outSet))
-                    foreach (var dst in outSet)
-                    {
-                        queue.DecreaseKey(dst, x => x - 1);
-
-                        if (_incomingEdges.TryGetValue(dst, out var inSet))
-                            inSet.Remove(node);
-                    }
+                var node = list.First.Value;
+                list.RemoveFirst();
 
                 yield return node;
+
+                foreach (var target in _outgoingEdges.TryGetValue(node, out var set) ? set : Enumerable.Empty<TNode>())
+                {
+                    var con = --refDict[target];
+                    if (con == 0) list.AddLast(target);
+                }
+            }
+
+            var remaining = refDict.Where(x => x.Value > 0).ToList();
+
+            if (remaining.Count > 0)
+                throw new CyclicGraphException(remaining.Select(x => x.Key));
+        }
+
+        public class CyclicGraphException : Exception
+        {
+            public readonly IReadOnlyList<TNode> ExtraNodes;
+
+            public CyclicGraphException(IEnumerable<TNode> extraNodes) : base("Encountered a cycle while attempting to topologically sort a directed graph.")
+            {
+                ExtraNodes = extraNodes.ToList();
             }
         }
     }
