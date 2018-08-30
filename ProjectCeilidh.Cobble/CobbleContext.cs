@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System;
-using System.Reflection;
 using System.Linq;
 using ProjectCeilidh.Cobble.Data;
 
@@ -11,6 +10,10 @@ namespace ProjectCeilidh.Cobble
     /// </summary>
     public sealed class CobbleContext
     {
+        public delegate object DuplicateResolutionHandler(Type dependencyType, object[] instances);
+
+        public DuplicateResolutionHandler DuplicateResolver { get; set; }
+
         private bool _firstStage;
 
         private readonly List<IInstanceGenerator> _instanceGenerators;
@@ -125,6 +128,8 @@ namespace ProjectCeilidh.Cobble
         {
             if (_firstStage) throw new Exception("You cannot execute a CobbleContext twice.");
 
+            _firstStage = true;
+
             // Create a lookup which maps provided type to the set off all generators that provide it.
             var implMap = _instanceGenerators
                 .SelectMany(x => x.Provides.Select(y => (Type: y, Generator: x)))
@@ -146,25 +151,29 @@ namespace ProjectCeilidh.Cobble
                 }
             }
 
-            foreach (var gen in graph.TopologicalSort()) // Sort the dependency graph topologically - all dependencies should be satisfied by the time we get to each unit
+            try
             {
-                var inst = CreateInstance(gen, _implementations);
-
-                PushInstanceProvides(gen, inst, _implementations);
-
-                if (gen is ILateInstanceGenerator late) // If the generator supports late injection, we need to add it to our list
+                foreach (var gen in graph.TopologicalSort()) // Sort the dependency graph topologically - all dependencies should be satisfied by the time we get to each unit
                 {
-                    foreach (var lateDep in late.LateDependencies)
+                    var inst = CreateInstance(gen, _implementations);
+
+                    PushInstanceProvides(gen, inst, _implementations);
+
+                    if (gen is ILateInstanceGenerator late) // If the generator supports late injection, we need to add it to our list
                     {
-                        if (_lateInjectInstances.TryGetValue(lateDep, out var lateSet))
-                            lateSet.Add(inst);
-                        else
-                            _lateInjectInstances[lateDep] = new HashSet<object>(new[] { inst });
+                        foreach (var lateDep in late.LateDependencies)
+                        {
+                            if (_lateInjectInstances.TryGetValue(lateDep, out var lateSet))
+                                lateSet.Add(inst);
+                            else
+                                _lateInjectInstances[lateDep] = new HashSet<object>(new[] { inst });
+                        }
                     }
                 }
             }
-
-            _firstStage = true;
+            catch (DirectedGraph<IInstanceGenerator>.CyclicGraphException) {
+                throw new CircularDependencyException();
+            }
         }
 
         /// <summary>
@@ -188,7 +197,7 @@ namespace ProjectCeilidh.Cobble
         /// <returns>The created object.</returns>
         /// <param name="gen">The generator instance.</param>
         /// <param name="instances">A dictionary mapping provided types to a set of instances.</param>
-        private static object CreateInstance(IInstanceGenerator gen, Dictionary<Type, HashSet<object>> instances)
+        private object CreateInstance(IInstanceGenerator gen, Dictionary<Type, HashSet<object>> instances)
         {
             var args = new object[gen.Dependencies.Count()];
             var i = 0;
@@ -208,7 +217,17 @@ namespace ProjectCeilidh.Cobble
                         args[i] = Array.CreateInstance(depType, 0);
                 }
                 else
-                    args[i] = instances[dep].SingleOrDefault(); // TODO: handle this
+                {
+                    if (instances[dep].Count <= 1)
+                        args[i] = instances[dep].FirstOrDefault();
+                    else
+                    {
+                        if (DuplicateResolver != null)
+                            args[i] = DuplicateResolver(dep, instances[dep].ToArray());
+                        else
+                            throw new AmbiguousDependencyException(dep);
+                    }
+                }
 
                 i++;
             }

@@ -61,6 +61,35 @@ namespace ProjectCeilidh.Cobble.Tests
             Assert.True(_context.TryGetSingleton<AdvancedDependUnit>(out var adv) && adv.TestUnits.Count == 2);
         }
 
+        [Fact]
+        public void DuplicateResolver()
+        {
+            var exec = false;
+
+            _context.DuplicateResolver = (dependencyType, instances) => {
+                exec = true;
+                return instances[0];
+            };
+
+            _context.AddManaged<TestUnit>();
+            _context.AddManaged<TestUnit>();
+            _context.AddManaged<BasicDependUnit>();
+
+            _context.Execute();
+
+            Assert.True(exec);
+        }
+
+        [Fact]
+        public void DuplicateException()
+        {
+            _context.AddManaged<TestUnit>();
+            _context.AddManaged<TestUnit>();
+            _context.AddManaged<BasicDependUnit>();
+
+            Assert.Throws<AmbiguousDependencyException>(() => _context.Execute());
+        }
+
         private interface ITestUnit
         {
             string TestValue { get; }
