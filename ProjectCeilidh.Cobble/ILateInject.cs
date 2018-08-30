@@ -1,7 +1,6 @@
-﻿using System;
-namespace ProjectCeilidh.Cobble
+﻿namespace ProjectCeilidh.Cobble
 {
-    public interface ILateInject<T>
+    public interface ILateInject<in T>
     {
         void UnitLoaded(T unit);
     }

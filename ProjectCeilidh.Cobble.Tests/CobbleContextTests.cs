@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using ProjectCeilidh.Cobble.Generator;
 using Xunit;
 
 namespace ProjectCeilidh.Cobble.Tests
@@ -88,6 +90,21 @@ namespace ProjectCeilidh.Cobble.Tests
             _context.AddManaged<BasicDependUnit>();
 
             Assert.Throws<AmbiguousDependencyException>(() => _context.Execute());
+        }
+
+        [Fact]
+        public void DictInstanceGenerator()
+        {
+            _context.AddManaged<TestUnit>();
+            _context.AddManaged(new DictionaryInstanceGenerator(typeof(ITestUnit), new Func<TestUnit, object>(x => x), new Dictionary<MethodInfo, Delegate>
+            {
+                [typeof(ITestUnit).GetMethod("get_TestValue")] = new Func<TestUnit, string>(x => x.TestValue)
+            }));
+
+            _context.Execute();
+            Assert.True(_context.TryGetImplementations<ITestUnit>(out var units));
+            foreach (var testUnit in units)
+                Assert.Equal("Hi", testUnit.TestValue);
         }
 
         private interface ITestUnit
