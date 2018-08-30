@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.26124.0
 MinimumVisualStudioVersion = 15.0.26124.0
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ProjectCeilidh.Cobble", "ProjectCeilidh.Cobble\ProjectCeilidh.Cobble.csproj", "{8CF29A18-3DE7-4927-9DC9-650D8D1A7F55}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProjectCeilidh.Cobble", "ProjectCeilidh.Cobble\ProjectCeilidh.Cobble.csproj", "{8CF29A18-3DE7-4927-9DC9-650D8D1A7F55}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProjectCeilidh.Cobble.Tests", "ProjectCeilidh.Cobble.Tests\ProjectCeilidh.Cobble.Tests.csproj", "{82328CBA-87E7-467C-A70A-A66A4505496D}"
 EndProject
