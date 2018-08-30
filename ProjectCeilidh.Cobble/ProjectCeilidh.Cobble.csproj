@@ -9,4 +9,7 @@
     <PackageLicenseUrl>https://raw.githubusercontent.com/Ceilidh-Team/Cobble/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/Ceilidh-Team/Cobble</PackageProjectUrl>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Reflection.DispatchProxy" Version="4.5.1" />
+  </ItemGroup>
 </Project>

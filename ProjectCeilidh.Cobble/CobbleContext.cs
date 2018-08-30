@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using ProjectCeilidh.Cobble.Data;
+using ProjectCeilidh.Cobble.Generator;
 
 namespace ProjectCeilidh.Cobble
 {
@@ -116,7 +117,7 @@ namespace ProjectCeilidh.Cobble
                     if (!_lateInjectInstances.TryGetValue(prov, out var set)) continue;
 
                     foreach (var late in set)
-                        late.GetType().GetMethod(nameof(ILateInject<object>.UnitLoaded), new[] { prov }).Invoke(late, new []{ inst });
+                        late.GetType().GetMethod(nameof(ILateInject<object>.UnitLoaded), new[] { prov })?.Invoke(late, new []{ inst });
                 }
             }
         }
@@ -233,55 +234,6 @@ namespace ProjectCeilidh.Cobble
             }
 
             return gen.GenerateInstance(args);
-        }
-
-        /// <summary>
-        /// Can produce an instance and set of dependencies given a type.
-        /// </summary>
-        private class TypeLateInstanceGenerator : ILateInstanceGenerator
-        {
-            public IEnumerable<Type> Provides { get; }
-            public IEnumerable<Type> Dependencies { get; }
-            public IEnumerable<Type> LateDependencies { get; }
-
-            private readonly Type _target;
-
-            public TypeLateInstanceGenerator(Type target)
-            {
-                _target = target;
-                Dependencies = target.GetConstructors().Single().GetParameters().Select(x => x.ParameterType).ToArray();
-                Provides = target.GetInterfaces().Concat(new[] { target }).Concat(target.Unroll(x => x.BaseType == typeof(object) ? Enumerable.Empty<Type>() : new []{ x.BaseType })).ToArray();
-                LateDependencies = target.GetInterfaces().Where(x => x.IsConstructedGenericType && x.GetGenericTypeDefinition() == typeof(ILateInject<>)).Select(x => x.GetGenericArguments()[0]).ToArray();
-            }
-
-            public object GenerateInstance(object[] args)
-            {
-                var ctor = _target.GetConstructors().Single();
-                return ctor.Invoke(args);
-            }
-        }
-
-        /// <summary>
-        /// Can provide an instance and dependency list from a pre-created instance.
-        /// </summary>
-        private class BareLateInstanceGenerator : ILateInstanceGenerator
-        {
-            public IEnumerable<Type> LateDependencies { get; }
-            public IEnumerable<Type> Provides { get; }
-            public IEnumerable<Type> Dependencies => Enumerable.Empty<Type>();
-
-            private readonly object _instance;
-
-            public BareLateInstanceGenerator(object instance)
-            {
-                _instance = instance;
-
-                var type = _instance.GetType();
-                LateDependencies = type.GetInterfaces().Where(x => x.IsConstructedGenericType && x.GetGenericTypeDefinition() == typeof(ILateInject<>)).Select(x => x.GetGenericArguments()[0]).ToArray();
-                Provides = type.GetInterfaces().Concat(new []{ type }).Concat(type.Unroll(x => x.BaseType == typeof(object) ? Enumerable.Empty<Type>() : new[] { x.BaseType })).ToArray();
-            }
-
-            public object GenerateInstance(object[] args) => _instance;
         }
     }
 }
