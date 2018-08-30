@@ -117,7 +117,7 @@ namespace ProjectCeilidh.Cobble
                     if (!_lateInjectInstances.TryGetValue(prov, out var set)) continue;
 
                     foreach (var late in set)
-                        late.GetType().GetMethod(nameof(ILateInject<object>.UnitLoaded), new[] { prov }).Invoke(late, new []{ inst });
+                        late.GetType().GetMethod(nameof(ILateInject<object>.UnitLoaded), new[] { prov })?.Invoke(late, new []{ inst });
                 }
             }
         }
