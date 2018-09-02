@@ -18,11 +18,11 @@ namespace ProjectCeilidh.Cobble.Generator
 
         public BareLateInstanceGenerator(object instance)
         {
-            _instance = instance;
+            _instance = instance ?? throw new ArgumentNullException(nameof(instance));
 
             var type = _instance.GetType();
             LateDependencies = type.GetInterfaces().Where(x => x.IsConstructedGenericType && x.GetGenericTypeDefinition() == typeof(ILateInject<>)).Select(x => x.GetGenericArguments()[0]).ToArray();
-            Provides = type.GetInterfaces().Concat(new []{ type }).Concat(type.Unroll(x => x.BaseType == typeof(object) || x.BaseType == null ? Enumerable.Empty<Type>() : new[] { x.BaseType })).ToArray();
+            Provides = type.GetAssignableFrom().ToArray();
         }
 
         public object GenerateInstance(object[] args) => _instance;
