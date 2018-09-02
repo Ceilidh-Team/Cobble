@@ -86,6 +86,34 @@ namespace ProjectCeilidh.Cobble.Data
                 throw new CyclicGraphException(remaining.Select(x => x.Key));
         }
 
+        public IEnumerable<TNode[]> ParallelTopologicalSort()
+        {
+            var refDict = new Dictionary<TNode, int>(_nodes);
+
+            var list = new LinkedList<TNode>(refDict.Where(x => x.Value == 0).Select(x => x.Key));
+
+            while (list.Count > 0)
+            {
+                var arr = new TNode[list.Count];
+                list.CopyTo(arr, 0);
+                list.Clear();
+
+                yield return arr;
+
+                foreach (var node in arr)
+                foreach (var target in _outgoingEdges.TryGetValue(node, out var set) ? set : Enumerable.Empty<TNode>())
+                {
+                    var con = --refDict[target];
+                    if (con == 0) list.AddLast(target);
+                }
+            }
+
+            var remaining = refDict.Where(x => x.Value > 0).ToList();
+
+            if (remaining.Count > 0)
+                throw new CyclicGraphException(remaining.Select(x => x.Key));
+        }
+
         public class CyclicGraphException : Exception
         {
             public readonly IReadOnlyList<TNode> ExtraNodes;

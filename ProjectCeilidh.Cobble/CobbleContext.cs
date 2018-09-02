@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading.Tasks;
 using ProjectCeilidh.Cobble.Data;
 using ProjectCeilidh.Cobble.Generator;
 
@@ -18,8 +20,8 @@ namespace ProjectCeilidh.Cobble
         private bool _firstStage;
 
         private readonly List<IInstanceGenerator> _instanceGenerators;
-        private readonly Dictionary<Type, HashSet<object>> _lateInjectInstances;
-        private readonly Dictionary<Type, HashSet<object>> _implementations;
+        private readonly ConcurrentDictionary<Type, HashSet<object>> _lateInjectInstances;
+        private readonly ConcurrentDictionary<Type, HashSet<object>> _implementations;
 
         /// <summary>
         /// Construct a new CobbleContext.
@@ -27,8 +29,8 @@ namespace ProjectCeilidh.Cobble
         public CobbleContext()
         {
             _instanceGenerators = new List<IInstanceGenerator>();
-            _lateInjectInstances = new Dictionary<Type, HashSet<object>>();
-            _implementations = new Dictionary<Type, HashSet<object>>();
+            _lateInjectInstances = new ConcurrentDictionary<Type, HashSet<object>>();
+            _implementations = new ConcurrentDictionary<Type, HashSet<object>>();
 
             AddUnmanaged(this);
         }
@@ -138,6 +140,58 @@ namespace ProjectCeilidh.Cobble
 
             var graph = new DirectedGraph<IInstanceGenerator>(_instanceGenerators);
 
+            foreach (var gen in _instanceGenerators) // Create links in the DirectedGraph between dependencies and the generators which provide them
+            {
+                foreach (var dep in gen.Dependencies)
+                {
+                    var depType = dep;
+
+                    if (dep.IsConstructedGenericType && dep.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                        depType = dep.GetGenericArguments()[0];
+
+                    foreach (var impl in implMap[depType])
+                        graph.Link(impl, gen);
+                }
+            }
+
+            try
+            {
+                foreach (var gen in graph.TopologicalSort()) // Sort the dependency graph topologically - all dependencies should be satisfied by the time we get to each unit
+                {
+                    var obj = CreateInstance(gen, _implementations);
+                    PushInstanceProvides(gen, obj, _implementations);
+
+                    if (!(gen is ILateInstanceGenerator late)) continue;
+
+                    // If the generator supports late injection, we need to add it to our list
+                    foreach (var lateDep in late.LateDependencies)
+                        _lateInjectInstances.AddOrUpdate(lateDep, x => new HashSet<object>(new[] {obj}),
+                            (a, b) =>
+                            {
+                                b.Add(a);
+                                return b;
+                            });
+                }
+            }
+            catch (DirectedGraph<IInstanceGenerator>.CyclicGraphException)
+            {
+                throw new CircularDependencyException();
+            }
+        }
+
+        public async Task ExecuteAsync()
+        {
+            if (_firstStage) throw new Exception("You cannot execute a CobbleContext twice.");
+
+            _firstStage = true;
+
+            // Create a lookup which maps provided type to the set off all generators that provide it.
+            var implMap = _instanceGenerators
+                .SelectMany(x => x.Provides.Select(y => (Type: y, Generator: x)))
+                .ToLookup(x => x.Type, x => x.Generator);
+
+            var graph = new DirectedGraph<IInstanceGenerator>(_instanceGenerators);
+
             foreach(var gen in _instanceGenerators) // Create links in the DirectedGraph between dependencies and the generators which provide them
             {
                 foreach(var dep in gen.Dependencies)
@@ -154,22 +208,24 @@ namespace ProjectCeilidh.Cobble
 
             try
             {
-                foreach (var gen in graph.TopologicalSort()) // Sort the dependency graph topologically - all dependencies should be satisfied by the time we get to each unit
+                foreach (var level in graph.ParallelTopologicalSort()) // Sort the dependency graph topologically - all dependencies should be satisfied by the time we get to each unit
                 {
-                    var inst = CreateInstance(gen, _implementations);
-
-                    PushInstanceProvides(gen, inst, _implementations);
-
-                    if (gen is ILateInstanceGenerator late) // If the generator supports late injection, we need to add it to our list
+                    await Task.WhenAll(level.Select(gen => Task.Run(() =>
                     {
+                        var obj = CreateInstance(gen, _implementations);
+                        PushInstanceProvides(gen, obj, _implementations);
+
+                        if (!(gen is ILateInstanceGenerator late)) return;
+
+                        // If the generator supports late injection, we need to add it to our list
                         foreach (var lateDep in late.LateDependencies)
-                        {
-                            if (_lateInjectInstances.TryGetValue(lateDep, out var lateSet))
-                                lateSet.Add(inst);
-                            else
-                                _lateInjectInstances[lateDep] = new HashSet<object>(new[] { inst });
-                        }
-                    }
+                            _lateInjectInstances.AddOrUpdate(lateDep, x => new HashSet<object>(new[] { obj }),
+                                (a, b) =>
+                                {
+                                    b.Add(obj);
+                                    return b;
+                                });
+                    })));
                 }
             }
             catch (DirectedGraph<IInstanceGenerator>.CyclicGraphException) {
@@ -183,13 +239,14 @@ namespace ProjectCeilidh.Cobble
         /// <param name="gen">The instance generator that produced the instance.</param>
         /// <param name="instance">The instance that was produced.</param>
         /// <param name="instances">A dictionary mapping provided types to a set of instances.</param>
-        private static void PushInstanceProvides(IInstanceGenerator gen, object instance, Dictionary<Type, HashSet<object>> instances)
+        private static void PushInstanceProvides(IInstanceGenerator gen, object instance, ConcurrentDictionary<Type, HashSet<object>> instances)
         {
             foreach (var prov in gen.Provides)
-                if (instances.TryGetValue(prov, out var set))
-                    set.Add(instance);
-                else
-                    instances[prov] = new HashSet<object>(new[] { instance });
+                instances.AddOrUpdate(prov, x => new HashSet<object>(new[] {instance}), (a, b) =>
+                {
+                    b.Add(instance);
+                    return b;
+                });
         }
 
         /// <summary>
@@ -198,7 +255,7 @@ namespace ProjectCeilidh.Cobble
         /// <returns>The created object.</returns>
         /// <param name="gen">The generator instance.</param>
         /// <param name="instances">A dictionary mapping provided types to a set of instances.</param>
-        private object CreateInstance(IInstanceGenerator gen, Dictionary<Type, HashSet<object>> instances)
+        private object CreateInstance(IInstanceGenerator gen, IDictionary<Type, HashSet<object>> instances)
         {
             var args = new object[gen.Dependencies.Count()];
             var i = 0;

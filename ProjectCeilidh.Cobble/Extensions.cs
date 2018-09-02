@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ProjectCeilidh.Cobble
 {
@@ -31,6 +32,22 @@ namespace ProjectCeilidh.Cobble
                     stack.Push(i);
                     yield return i;
                 }
+            }
+        }
+
+        public static IEnumerable<Type> GetAssignableFrom(this Type type)
+        {
+            foreach (var intf in type.GetInterfaces())
+                yield return intf;
+
+            yield return type;
+
+            var b = type.BaseType;
+
+            while (b != null && b != typeof(object))
+            {
+                b = b.BaseType;
+                yield return b;
             }
         }
     }
