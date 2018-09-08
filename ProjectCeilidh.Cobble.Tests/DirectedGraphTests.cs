@@ -1,5 +1,6 @@
-﻿using System;
+﻿using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 using ProjectCeilidh.Cobble.Data;
 
@@ -25,7 +26,7 @@ namespace ProjectCeilidh.Cobble.Tests
         }
 
         [Fact]
-        public void ParallelTopologicalSort()
+        public async Task ParallelTopologicalSort()
         {
             var graph = new DirectedGraph<int>(Enumerable.Range(0, 5));
             graph.Link(0, 1);
@@ -33,14 +34,11 @@ namespace ProjectCeilidh.Cobble.Tests
             graph.Link(1, 3);
             graph.Link(4, 3);
 
-            Assert.Collection(graph.ParallelTopologicalSort(), InitialInspector, x => Assert.Equal(new []{ 1 }, x), x => Assert.Equal(new []{ 3 }, x));
+            var queue = new ConcurrentQueue<int>();
 
-            void InitialInspector(int[] value)
-            {
-                Array.Sort(value);
+            await graph.ParallelTopologicalSort(x => queue.Enqueue(x));
 
-                Assert.Equal(new []{ 0, 2, 4 }, value);
-            }
+            Assert.Collection(queue, value => Assert.True(value == 0 || value == 2 || value == 4), value => Assert.True(value == 0 || value == 2 || value == 4), value => Assert.True(value == 0 || value == 2 || value == 4 || value == 1), value => Assert.True(value == 4 || value == 1), x => Assert.Equal(3, x));
         }
 
         [Fact]
@@ -57,7 +55,7 @@ namespace ProjectCeilidh.Cobble.Tests
         }
 
         [Fact]
-        public void ParallelCircularDependency()
+        public async Task ParallelCircularDependency()
         {
             var graph = new DirectedGraph<int>(Enumerable.Range(0, 5));
             graph.Link(0, 1);
@@ -66,7 +64,7 @@ namespace ProjectCeilidh.Cobble.Tests
             graph.Link(4, 3);
             graph.Link(3, 0);
 
-            Assert.Throws<DirectedGraph<int>.CyclicGraphException>(() => graph.ParallelTopologicalSort().ToList());
+            await Assert.ThrowsAsync<DirectedGraph<int>.CyclicGraphException>(async () => await graph.ParallelTopologicalSort(_ => { }));
         }
     }
 }

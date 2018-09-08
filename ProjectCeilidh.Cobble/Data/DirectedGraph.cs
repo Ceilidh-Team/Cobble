@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace ProjectCeilidh.Cobble.Data
 {
@@ -10,6 +12,7 @@ namespace ProjectCeilidh.Cobble.Data
     /// <typeparam name="TNode"></typeparam>
     internal class DirectedGraph<TNode>
     {
+        private readonly HashSet<TNode> _initialNodes;
         private readonly Dictionary<TNode, int> _nodes;
         private readonly Dictionary<TNode, HashSet<TNode>> _outgoingEdges;
 
@@ -18,7 +21,6 @@ namespace ProjectCeilidh.Cobble.Data
         /// </summary>
         public DirectedGraph() : this(Enumerable.Empty<TNode>())
         {
-
         }
 
         /// <summary>
@@ -27,7 +29,8 @@ namespace ProjectCeilidh.Cobble.Data
         /// <param name="initialNodes">Initial nodes.</param>
         public DirectedGraph(IEnumerable<TNode> initialNodes)
         {
-            _nodes = initialNodes.ToDictionary(x => x, x => 0);
+            _initialNodes = new HashSet<TNode>(initialNodes);
+            _nodes = _initialNodes.ToDictionary(x => x, x => 0);
             _outgoingEdges = new Dictionary<TNode, HashSet<TNode>>();
         }
 
@@ -36,7 +39,11 @@ namespace ProjectCeilidh.Cobble.Data
         /// </summary>
         /// <returns>True if the node was added, false otherwise.</returns>
         /// <param name="node">The node to add.</param>
-        public void Add(TNode node) => _nodes[node] = 0;
+        public void Add(TNode node)
+        {
+            _nodes[node] = 0;
+            _initialNodes.Add(node);
+        }
 
         /// <summary>
         /// Add a link from <paramref name="src"/> to <paramref name="dst"/>.
@@ -50,6 +57,7 @@ namespace ProjectCeilidh.Cobble.Data
 
             outSet.Add(dst);
             _nodes[dst]++;
+            _initialNodes.Remove(dst);
         }
 
         /// <summary>
@@ -64,7 +72,7 @@ namespace ProjectCeilidh.Cobble.Data
         {
             var refDict = new Dictionary<TNode, int>(_nodes);
 
-            var list = new LinkedList<TNode>(refDict.Where(x => x.Value == 0).Select(x => x.Key));
+            var list = new LinkedList<TNode>(_initialNodes);
 
             while (list.Count > 0)
             {
@@ -86,32 +94,34 @@ namespace ProjectCeilidh.Cobble.Data
                 throw new CyclicGraphException(remaining.Select(x => x.Key));
         }
 
-        public IEnumerable<TNode[]> ParallelTopologicalSort()
+        /// <summary>
+        /// Topologically sort the graph, invoking the callback in parallel where possible
+        /// </summary>
+        /// <param name="callback">The callback to invoke</param>
+        /// <returns>A task following the parallel sort</returns>
+        public async Task ParallelTopologicalSort(Action<TNode> callback)
         {
-            var refDict = new Dictionary<TNode, int>(_nodes);
+            var refDict = new ConcurrentDictionary<TNode, int>(_nodes);
 
-            var list = new LinkedList<TNode>(refDict.Where(x => x.Value == 0).Select(x => x.Key));
+            await Task.WhenAll(_initialNodes.Select(HandleItem));
 
-            while (list.Count > 0)
-            {
-                var arr = new TNode[list.Count];
-                list.CopyTo(arr, 0);
-                list.Clear();
-
-                yield return arr;
-
-                foreach (var node in arr)
-                foreach (var target in _outgoingEdges.TryGetValue(node, out var set) ? set : Enumerable.Empty<TNode>())
-                {
-                    var con = --refDict[target];
-                    if (con == 0) list.AddLast(target);
-                }
-            }
-
-            var remaining = refDict.Where(x => x.Value > 0).ToList();
+            var remaining = refDict.Where(x => x.Value != 0).ToList();
 
             if (remaining.Count > 0)
                 throw new CyclicGraphException(remaining.Select(x => x.Key));
+
+            async Task HandleItem(TNode node)
+            {
+                await Task.Run(() => callback(node));
+
+                if (_outgoingEdges.TryGetValue(node, out var set))
+                    await Task.WhenAll(set.Select(async target =>
+                    {
+                        var con = refDict.AddOrUpdate(target, 0, (a, b) => b - 1);
+
+                        if (con == 0) await HandleItem(target);
+                    }));
+            }
         }
 
         public class CyclicGraphException : Exception

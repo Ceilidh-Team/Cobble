@@ -29,5 +29,7 @@ namespace ProjectCeilidh.Cobble.Generator
             var ctor = _target.GetConstructors().Single();
             return ctor.Invoke(args);
         }
+
+        public override string ToString() => $"TypeLateInstanceGenerator({_target.FullName})";
     }
 }
