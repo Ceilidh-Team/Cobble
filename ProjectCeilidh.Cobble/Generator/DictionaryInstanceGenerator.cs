@@ -43,6 +43,8 @@ namespace ProjectCeilidh.Cobble.Generator
             return proxy;
         }
 
+        public override string ToString() => $"DictionaryInstanceGenerator({_contractType.FullName})";
+
         /// <summary>
         /// Provides a way to implement the specified contract at runtime.
         /// </summary>

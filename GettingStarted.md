@@ -14,8 +14,9 @@
 
 ## Advanced Usage
 
+* To improve application startup time, use `CobbleContext.ExecuteAsync` instead of `CobbleContext.Execute`. This will cause initialization steps to be performed in parallel where possible, saving a lot of time if any of your constructors are long-running.
 * If any class you register with the system implements `ILateInject<>` at least once, the constructed instance will be notified whenever any new classes are registered with the owner `CobbleContext` after `CobbleContext.Execute` is called.
   * This allows for, in certain conditions, plugins to be loaded without requiring an application restart.
 * `CobbleContext.AddManaged` can accept any implementation of `IInstanceGenerator`, not just existing types. This can allow for object construction that does not use a type constructor.
   * See the [reference implementations](ProjectCeilidh.Cobble/Generator) of `IInstanceGenerator` for examples on how to implement this interface.
-* Creating a `CobbleContext` automatically registers itself with the dependency injection system, allowing you to depend on it and access it later on.
+* The `CobbleContext` you create automatically registers itself with the dependency injection system, allowing you to depend on it and access it later on.

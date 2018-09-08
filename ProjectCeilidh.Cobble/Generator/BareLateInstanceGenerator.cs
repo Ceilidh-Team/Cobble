@@ -26,5 +26,7 @@ namespace ProjectCeilidh.Cobble.Generator
         }
 
         public object GenerateInstance(object[] args) => _instance;
+
+        public override string ToString() => $"BareLateInstanceGenerator({_instance.GetType().FullName})";
     }
 }
