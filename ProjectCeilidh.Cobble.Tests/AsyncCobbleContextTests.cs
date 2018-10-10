@@ -108,6 +108,32 @@ namespace ProjectCeilidh.Cobble.Tests
                 Assert.Equal("Hi", testUnit.TestValue);
         }
 
+        [Fact]
+        public async Task DisposeTest()
+        {
+            _context.AddManaged<DisposeTestUnit>();
+
+            await _context.ExecuteAsync();
+            Assert.True(_context.TryGetSingleton(out DisposeTestUnit testUnit) && !testUnit.IsDisposed);
+            _context.Dispose();
+            Assert.True(testUnit.IsDisposed);
+        }
+
+        private class DisposeTestUnit : IDisposable
+        {
+            public bool IsDisposed { get; private set; }
+
+            public DisposeTestUnit()
+            {
+                IsDisposed = false;
+            }
+
+            public void Dispose()
+            {
+                IsDisposed = true;
+            }
+        }
+
         private interface ITestUnit
         {
             string TestValue { get; }

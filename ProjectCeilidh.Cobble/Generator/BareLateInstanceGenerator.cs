@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace ProjectCeilidh.Cobble.Generator
 {
@@ -21,7 +22,7 @@ namespace ProjectCeilidh.Cobble.Generator
             _instance = instance ?? throw new ArgumentNullException(nameof(instance));
 
             var type = _instance.GetType();
-            LateDependencies = type.GetInterfaces().Where(x => x.IsConstructedGenericType && x.GetGenericTypeDefinition() == typeof(ILateInject<>)).Select(x => x.GetGenericArguments()[0]).ToArray();
+            LateDependencies = type.GetTypeInfo().ImplementedInterfaces.Where(x => x.IsConstructedGenericType && x.GetGenericTypeDefinition() == typeof(ILateInject<>)).Select(x => x.GenericTypeArguments[0]).ToArray();
             Provides = type.GetAssignableFrom().ToArray();
         }
 

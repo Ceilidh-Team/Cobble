@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard1.3</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Authors>Olivia Trewin</Authors>
     <Company>Project Ceilidh</Company>
@@ -12,7 +12,7 @@
     <RepositoryUrl>https://github.com/Ceilidh-Team/Cobble.git</RepositoryUrl>
     <Copyright>2018 Olivia Trewin</Copyright>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>1.1.1</Version>
+    <Version>1.2.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Reflection.DispatchProxy" Version="4.5.1" />

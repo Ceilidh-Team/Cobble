@@ -7,7 +7,7 @@ using Xunit;
 
 namespace ProjectCeilidh.Cobble.Tests
 {
-    public class CobbleContextTests
+    public class CobbleContextTests : IDisposable
     {
         private readonly CobbleContext _context;
 
@@ -107,6 +107,32 @@ namespace ProjectCeilidh.Cobble.Tests
                 Assert.Equal("Hi", testUnit.TestValue);
         }
 
+        [Fact]
+        public void DisposeTest()
+        {
+            _context.AddManaged<DisposeTestUnit>();
+
+            _context.Execute();
+            Assert.True(_context.TryGetSingleton(out DisposeTestUnit testUnit) && !testUnit.IsDisposed);
+            _context.Dispose();
+            Assert.True(testUnit.IsDisposed);
+        }
+
+        private class DisposeTestUnit : IDisposable
+        {
+            public bool IsDisposed { get; private set; }
+
+            public DisposeTestUnit()
+            {
+                IsDisposed = false;
+            }
+
+            public void Dispose()
+            {
+                IsDisposed = true;
+            }
+        }
+
         private interface ITestUnit
         {
             string TestValue { get; }
@@ -150,6 +176,11 @@ namespace ProjectCeilidh.Cobble.Tests
             {
                 TestUnits.Add(unit);
             }
+        }
+
+        public void Dispose()
+        {
+            _context.Dispose();
         }
     }
 }
