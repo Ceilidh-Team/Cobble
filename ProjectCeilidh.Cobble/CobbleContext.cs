@@ -98,7 +98,7 @@ namespace ProjectCeilidh.Cobble
         {
             if (type == null) throw new ArgumentNullException(nameof(type));
 
-            if (type.GetTypeInfo().DeclaredConstructors.Where(x => (x.CallingConvention & CallingConventions.HasThis) != 0).Count() != 1)
+            if (type.GetTypeInfo().DeclaredConstructors.Count(x => (x.CallingConvention & CallingConventions.HasThis) != 0) != 1)
                 throw new ArgumentException("Managed types must have exactly one public constructor.", nameof(type));
 
             AddManaged(new TypeLateInstanceGenerator(type));
