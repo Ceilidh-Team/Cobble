@@ -20,14 +20,14 @@ namespace ProjectCeilidh.Cobble.Generator
         public TypeLateInstanceGenerator(Type target)
         {
             _target = target;
-            Dependencies = target.GetTypeInfo().DeclaredConstructors.Single().GetParameters().Select(x => x.ParameterType).ToArray();
+            Dependencies = target.GetTypeInfo().DeclaredConstructors.Single(x => (x.CallingConvention & CallingConventions.HasThis) != 0).GetParameters().Select(x => x.ParameterType).ToArray();
             Provides = target.GetAssignableFrom().ToArray();
             LateDependencies = target.GetTypeInfo().ImplementedInterfaces.Where(x => x.IsConstructedGenericType && x.GetGenericTypeDefinition() == typeof(ILateInject<>)).Select(x => x.GenericTypeArguments[0]).ToArray();
         }
 
         public object GenerateInstance(object[] args)
         {
-            var ctor = _target.GetTypeInfo().DeclaredConstructors.Single();
+            var ctor = _target.GetTypeInfo().DeclaredConstructors.Single(x => (x.CallingConvention & CallingConventions.HasThis) != 0);
             return ctor.Invoke(args);
         }
 
