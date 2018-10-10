@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using ProjectCeilidh.Cobble.Data;
 using ProjectCeilidh.Cobble.Generator;
@@ -11,7 +12,8 @@ namespace ProjectCeilidh.Cobble
     /// <summary>
     /// An application context which allows for dependency graph construction and object creation.
     /// </summary>
-    public sealed class CobbleContext
+    /// <inheritdoc />
+    public sealed class CobbleContext : IDisposable
     {
         public delegate object DuplicateResolutionHandler(Type dependencyType, object[] instances);
 
@@ -22,6 +24,7 @@ namespace ProjectCeilidh.Cobble
         private readonly List<IInstanceGenerator> _instanceGenerators;
         private readonly ConcurrentDictionary<Type, ConcurrentBag<object>> _lateInjectInstances;
         private readonly ConcurrentDictionary<Type, ConcurrentBag<object>> _implementations;
+        private readonly ConcurrentBag<IDisposable> _disposeHooks;
 
         /// <summary>
         /// Construct a new CobbleContext.
@@ -31,6 +34,7 @@ namespace ProjectCeilidh.Cobble
             _instanceGenerators = new List<IInstanceGenerator>();
             _lateInjectInstances = new ConcurrentDictionary<Type, ConcurrentBag<object>>();
             _implementations = new ConcurrentDictionary<Type, ConcurrentBag<object>>();
+            _disposeHooks = new ConcurrentBag<IDisposable>();
 
             AddUnmanaged(this);
         }
@@ -94,7 +98,7 @@ namespace ProjectCeilidh.Cobble
         {
             if (type == null) throw new ArgumentNullException(nameof(type));
 
-            if (type.GetConstructors().Length != 1)
+            if (type.GetTypeInfo().DeclaredConstructors.Count() != 1)
                 throw new ArgumentException("Managed types must have exactly one public constructor.", nameof(type));
 
             AddManaged(new TypeLateInstanceGenerator(type));
@@ -113,13 +117,13 @@ namespace ProjectCeilidh.Cobble
             else
             {
                 var inst = CreateInstance(generator, _implementations);
-                PushInstanceProvides(generator, inst, _implementations);
+                PushInstanceProvides(generator, inst);
                 foreach(var prov in generator.Provides)
                 {
                     if (!_lateInjectInstances.TryGetValue(prov, out var set)) continue;
 
                     foreach (var late in set)
-                        late.GetType().GetMethod(nameof(ILateInject<object>.UnitLoaded), new[] { prov })?.Invoke(late, new []{ inst });
+                        late.GetType().GetRuntimeMethod(nameof(ILateInject<object>.UnitLoaded), new[] { prov })?.Invoke(late, new []{ inst });
                 }
             }
         }
@@ -135,7 +139,7 @@ namespace ProjectCeilidh.Cobble
 
             // Create a lookup which maps provided type to the set off all generators that provide it.
             var implMap = _instanceGenerators
-                .SelectMany(x => x.Provides.Select(y => (Type: y, Generator: x)))
+                .SelectMany(x => x.Provides.Select(y => new { Type = y, Generator = x }))
                 .ToLookup(x => x.Type, x => x.Generator);
 
             var graph = new DirectedGraph<IInstanceGenerator>(_instanceGenerators);
@@ -147,7 +151,7 @@ namespace ProjectCeilidh.Cobble
                     var depType = dep;
 
                     if (dep.IsConstructedGenericType && dep.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-                        depType = dep.GetGenericArguments()[0];
+                        depType = dep.GenericTypeArguments[0];
 
                     foreach (var impl in implMap[depType])
                         graph.Link(impl, gen);
@@ -159,7 +163,7 @@ namespace ProjectCeilidh.Cobble
                 foreach (var gen in graph.TopologicalSort()) // Sort the dependency graph topologically - all dependencies should be satisfied by the time we get to each unit
                 {
                     var obj = CreateInstance(gen, _implementations);
-                    PushInstanceProvides(gen, obj, _implementations);
+                    PushInstanceProvides(gen, obj);
 
                     if (!(gen is ILateInstanceGenerator late)) continue;
 
@@ -187,7 +191,7 @@ namespace ProjectCeilidh.Cobble
 
             // Create a lookup which maps provided type to the set off all generators that provide it.
             var implMap = _instanceGenerators
-                .SelectMany(x => x.Provides.Select(y => (Type: y, Generator: x)))
+                .SelectMany(x => x.Provides.Select(y => new { Type = y, Generator = x }))
                 .ToLookup(x => x.Type, x => x.Generator);
 
             var graph = new DirectedGraph<IInstanceGenerator>(_instanceGenerators);
@@ -199,7 +203,7 @@ namespace ProjectCeilidh.Cobble
                     var depType = dep;
 
                     if (dep.IsConstructedGenericType && dep.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-                        depType = dep.GetGenericArguments()[0];
+                        depType = dep.GenericTypeArguments[0];
 
                     foreach (var impl in implMap[depType])
                         graph.Link(impl, gen);
@@ -211,7 +215,7 @@ namespace ProjectCeilidh.Cobble
                 await graph.ParallelTopologicalSort(gen =>
                 {
                     var obj = CreateInstance(gen, _implementations);
-                    PushInstanceProvides(gen, obj, _implementations);
+                    PushInstanceProvides(gen, obj);
 
                     if (!(gen is ILateInstanceGenerator late)) return;
 
@@ -230,20 +234,29 @@ namespace ProjectCeilidh.Cobble
             }
         }
 
+        public void Dispose()
+        {
+            while (_disposeHooks.TryTake(out var result))
+                result.Dispose();
+        }
+
         /// <summary>
         /// Given a generator and an instance, push it into the relevant provider dictionaries
         /// </summary>
         /// <param name="gen">The instance generator that produced the instance.</param>
         /// <param name="instance">The instance that was produced.</param>
-        /// <param name="instances">A dictionary mapping provided types to a set of instances.</param>
-        private static void PushInstanceProvides(IInstanceGenerator gen, object instance, ConcurrentDictionary<Type, ConcurrentBag<object>> instances)
+        private void PushInstanceProvides(IInstanceGenerator gen, object instance)
         {
             foreach (var prov in gen.Provides)
-                instances.AddOrUpdate(prov, x => new ConcurrentBag<object>(new[] {instance}), (a, b) =>
+                _implementations.AddOrUpdate(prov, x => new ConcurrentBag<object>(new[] {instance}), (a, b) =>
                 {
                     b.Add(instance);
                     return b;
                 });
+
+            if (instance is IDisposable disp)
+                _disposeHooks.Add(disp);
+                
         }
 
         /// <summary>
@@ -260,7 +273,7 @@ namespace ProjectCeilidh.Cobble
             {
                 if (dep.IsConstructedGenericType && dep.GetGenericTypeDefinition() == typeof(IEnumerable<>))
                 {
-                    var depType = dep.GetGenericArguments()[0];
+                    var depType = dep.GenericTypeArguments[0];
 
                     if (instances.TryGetValue(depType, out var set))
                     {

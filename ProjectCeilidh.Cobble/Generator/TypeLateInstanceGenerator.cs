@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace ProjectCeilidh.Cobble.Generator
 {
@@ -19,14 +20,14 @@ namespace ProjectCeilidh.Cobble.Generator
         public TypeLateInstanceGenerator(Type target)
         {
             _target = target;
-            Dependencies = target.GetConstructors().Single().GetParameters().Select(x => x.ParameterType).ToArray();
+            Dependencies = target.GetTypeInfo().DeclaredConstructors.Single().GetParameters().Select(x => x.ParameterType).ToArray();
             Provides = target.GetAssignableFrom().ToArray();
-            LateDependencies = target.GetInterfaces().Where(x => x.IsConstructedGenericType && x.GetGenericTypeDefinition() == typeof(ILateInject<>)).Select(x => x.GetGenericArguments()[0]).ToArray();
+            LateDependencies = target.GetTypeInfo().ImplementedInterfaces.Where(x => x.IsConstructedGenericType && x.GetGenericTypeDefinition() == typeof(ILateInject<>)).Select(x => x.GenericTypeArguments[0]).ToArray();
         }
 
         public object GenerateInstance(object[] args)
         {
-            var ctor = _target.GetConstructors().Single();
+            var ctor = _target.GetTypeInfo().DeclaredConstructors.Single();
             return ctor.Invoke(args);
         }
 

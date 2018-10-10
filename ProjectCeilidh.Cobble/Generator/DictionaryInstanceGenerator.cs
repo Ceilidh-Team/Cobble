@@ -11,7 +11,7 @@ namespace ProjectCeilidh.Cobble.Generator
     /// </summary>
     public class DictionaryInstanceGenerator : IInstanceGenerator
     {
-        private static readonly MethodInfo DispatchProxyCreate = typeof(DispatchProxy).GetMethod(nameof(DispatchProxy.Create)) ?? throw new Exception("Cannot find DispatchProxy.Create - this should be impossible.");
+        private static readonly MethodInfo DispatchProxyCreate = typeof(DispatchProxy).GetRuntimeMethod(nameof(DispatchProxy.Create), new Type[0]) ?? throw new Exception("Cannot find DispatchProxy.Create - this should be impossible.");
 
         public IEnumerable<Type> Provides { get; }
         public IEnumerable<Type> Dependencies { get; }
@@ -28,8 +28,8 @@ namespace ProjectCeilidh.Cobble.Generator
         /// <param name="implementations">A dictionary containing all implemented functions as delegates.</param>
         public DictionaryInstanceGenerator(Type contractType, Delegate ctor, IReadOnlyDictionary<MethodInfo, Delegate> implementations)
         {
-            Dependencies = ctor == null ? new Type[0] : ctor.Method.GetParameters().Select(x => x.ParameterType).ToArray();
-            Provides = contractType.GetInterfaces().Concat(new []{ contractType }).Concat(contractType.Unroll(x => x.BaseType == typeof(object) || x.BaseType == null ? new Type[0] : new []{ x.BaseType }));
+            Dependencies = ctor == null ? new Type[0] : ctor.GetMethodInfo().GetParameters().Select(x => x.ParameterType).ToArray();
+            Provides = contractType.GetTypeInfo().ImplementedInterfaces.Concat(new []{ contractType }).Concat(contractType.Unroll(x => x.GetTypeInfo().BaseType == typeof(object) || x.GetTypeInfo().BaseType == null ? new Type[0] : new []{ x.GetTypeInfo().BaseType }));
             _contractType = contractType;
             _ctor = ctor;
             _implementations = implementations;
