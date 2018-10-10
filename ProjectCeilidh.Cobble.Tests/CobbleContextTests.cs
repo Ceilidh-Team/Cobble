@@ -7,7 +7,7 @@ using Xunit;
 
 namespace ProjectCeilidh.Cobble.Tests
 {
-    public class CobbleContextTests : IDisposable
+    public class CobbleContextTests
     {
         private readonly CobbleContext _context;
 
@@ -163,6 +163,9 @@ namespace ProjectCeilidh.Cobble.Tests
 
         private class AdvancedDependUnit : ILateInject<ITestUnit>
         {
+            // This is here to force a static constructor
+            private static readonly object SomeObject = new object();
+
             public readonly List<ITestUnit> TestUnits;
 
             public AdvancedDependUnit(IEnumerable<ITestUnit> units)
@@ -176,11 +179,6 @@ namespace ProjectCeilidh.Cobble.Tests
             {
                 TestUnits.Add(unit);
             }
-        }
-
-        public void Dispose()
-        {
-            _context.Dispose();
         }
     }
 }
