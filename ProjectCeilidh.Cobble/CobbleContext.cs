@@ -98,7 +98,7 @@ namespace ProjectCeilidh.Cobble
         {
             if (type == null) throw new ArgumentNullException(nameof(type));
 
-            if (type.GetTypeInfo().DeclaredConstructors.Count(x => (x.CallingConvention & CallingConventions.HasThis) != 0) != 1)
+            if (type.GetTypeInfo().DeclaredConstructors.Count(x => x.IsPublic && (x.CallingConvention & CallingConventions.HasThis) != 0) != 1)
                 throw new ArgumentException("Managed types must have exactly one public constructor.", nameof(type));
 
             AddManaged(new TypeLateInstanceGenerator(type));
@@ -254,7 +254,7 @@ namespace ProjectCeilidh.Cobble
                     return b;
                 });
 
-            if (instance is IDisposable disp)
+            if (!ReferenceEquals(instance, this) && instance is IDisposable disp)
                 _disposeHooks.Add(disp);
                 
         }
