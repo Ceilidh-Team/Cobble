@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using ProjectCeilidh.Cobble.Data;
 using ProjectCeilidh.Cobble.Generator;
+using ProjectCeilidh.Cobble.Callbacks;
 
 namespace ProjectCeilidh.Cobble
 {
@@ -126,6 +127,8 @@ namespace ProjectCeilidh.Cobble
                         late.GetType().GetRuntimeMethod(nameof(ILateInject<object>.UnitLoaded), new[] { prov })?.Invoke(late, new []{ inst });
                 }
             }
+
+            InstanceGeneratorAdded?.Invoke(this, new InstanceGeneratorAddedEventArgs(generator));
         }
 
         /// <summary>
@@ -169,7 +172,7 @@ namespace ProjectCeilidh.Cobble
 
                     // If the generator supports late injection, we need to add it to our list
                     foreach (var lateDep in late.LateDependencies)
-                        _lateInjectInstances.AddOrUpdate(lateDep, x => new ConcurrentBag<object>(new[] {obj}), 
+                        _lateInjectInstances.AddOrUpdate(lateDep, x => new ConcurrentBag<object>(new[] {obj}),
                             (a, b) =>
                             {
                                 b.Add(a);
@@ -221,7 +224,7 @@ namespace ProjectCeilidh.Cobble
 
                     // If the generator supports late injection, we need to add it to our list
                     foreach (var lateDep in late.LateDependencies)
-                        _lateInjectInstances.AddOrUpdate(lateDep, x => new ConcurrentBag<object>(new[] { obj }), 
+                        _lateInjectInstances.AddOrUpdate(lateDep, x => new ConcurrentBag<object>(new[] { obj }),
                             (a, b) =>
                             {
                                 b.Add(obj);
@@ -241,6 +244,16 @@ namespace ProjectCeilidh.Cobble
         }
 
         /// <summary>
+        /// Event invoked when a new instance generator is added to the dependency graph
+        /// </summary>
+        public event InstanceGeneratorAddedEventHandler InstanceGeneratorAdded;
+
+        /// <summary>
+        /// Event invoked when an instance is created during execution
+        /// </summary>
+        public event InstanceCreatedEventHandler InstanceCreated;
+
+        /// <summary>
         /// Given a generator and an instance, push it into the relevant provider dictionaries
         /// </summary>
         /// <param name="gen">The instance generator that produced the instance.</param>
@@ -256,7 +269,7 @@ namespace ProjectCeilidh.Cobble
 
             if (!ReferenceEquals(instance, this) && instance is IDisposable disp)
                 _disposeHooks.Add(disp);
-                
+
         }
 
         /// <summary>
@@ -300,7 +313,11 @@ namespace ProjectCeilidh.Cobble
                 i++;
             }
 
-            return gen.GenerateInstance(args);
+            var instance = gen.GenerateInstance(args);
+
+            InstanceCreated?.Invoke(this, new InstanceCreatedEventArgs(gen, instance));
+
+            return instance;
         }
     }
 }

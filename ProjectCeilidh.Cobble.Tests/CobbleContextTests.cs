@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using ProjectCeilidh.Cobble.Callbacks;
 using ProjectCeilidh.Cobble.Generator;
 using Xunit;
 
@@ -19,11 +20,39 @@ namespace ProjectCeilidh.Cobble.Tests
         [Fact]
         public void BasicLoad()
         {
+            var genAdded = false;
+            var instanceGen = false;
+
+            _context.InstanceGeneratorAdded += InstanceGeneratorAdded;
+            _context.InstanceCreated += InstanceCreated;
             _context.AddManaged<TestUnit>();
             _context.Execute();
 
-            Assert.True(_context.TryGetSingleton<TestUnit>(out _));
-            Assert.True(_context.TryGetSingleton<ITestUnit>(out _));
+            Assert.True(genAdded, "InstanceGeneratorAdded event did not fire");
+            Assert.True(instanceGen, "InstanceCreated event did not fire");
+
+            Assert.True(_context.TryGetSingleton<TestUnit>(out _), "Could not get TestUnit as TestUnit");
+            Assert.True(_context.TryGetSingleton<ITestUnit>(out _), "Could not get TestUnit as ITestUnit");
+
+            _context.InstanceGeneratorAdded -= InstanceGeneratorAdded;
+            _context.InstanceCreated -= InstanceCreated;
+
+            void InstanceGeneratorAdded(object sender, InstanceGeneratorAddedEventArgs e)
+            {
+                genAdded =
+                    sender == _context
+                    && e.InstanceGenerator is TypeLateInstanceGenerator gen
+                    && gen.Provides.Contains(typeof(TestUnit));
+            }
+
+            void InstanceCreated(object sender, InstanceCreatedEventArgs e)
+            {
+                instanceGen =
+                    sender == _context
+                    && e.InstanceGenerator is TypeLateInstanceGenerator gen
+                    && gen.Provides.Contains(typeof(TestUnit))
+                    && e.Instance is TestUnit;
+            }
         }
 
         [Fact]
@@ -33,9 +62,9 @@ namespace ProjectCeilidh.Cobble.Tests
             _context.AddManaged<BasicDependUnit>();
             _context.Execute();
 
-            Assert.True(_context.TryGetSingleton<TestUnit>(out _));
-            Assert.True(_context.TryGetSingleton<ITestUnit>(out _));
-            Assert.True(_context.TryGetSingleton<BasicDependUnit>(out _));
+            Assert.True(_context.TryGetSingleton<TestUnit>(out _), "Could not get TestUnit as TestUnit");
+            Assert.True(_context.TryGetSingleton<ITestUnit>(out _), "Could not get TestUnit as ITestUnit");
+            Assert.True(_context.TryGetSingleton<BasicDependUnit>(out _), "Could not get BasicDependUnit as BasicDependUnit");
         }
 
         [Fact]
